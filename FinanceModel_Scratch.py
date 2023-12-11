@@ -15,14 +15,15 @@ function_generator =  FunctionGenerator(function_name="state_loading")
 input_dict = function_generator.create_inputs(
     {"io": QUInt[sp_num_qubits], "ind": QUInt[1]}
 )
-
-print(input_dict)
+#
+# print(input_dict)
 
 probabilities = np.linspace(0, 1, 2**sp_num_qubits) / sum(
     np.linspace(0, 1, 2**sp_num_qubits)
 )
 
 #can be specified, this is just an example
+#for a better code, I will make the peobabilities list a user input and give options of usual distributions like Gaussian, log-normal etc
 
 # print(probabilities)
 sp_params = StatePreparation(
@@ -38,7 +39,7 @@ qmci_library.add_function(function_generator.to_function_definition())
 
 function_generator = FunctionGenerator(function_name="amp_load")
 
-io = RegisterUserInput(size=3)
+# io = RegisterUserInput(size=3)
 input_dict = function_generator.create_inputs(
     {"io": QUInt[sp_num_qubits], "ind": QUInt[1]}
 )
@@ -48,6 +49,8 @@ amplitude_loading_params = PiecewiseLinearAmplitudeLoading(
     affine_maps=[{"offset": 0, "slope": 0}, {"offset": -3.14, "slope": 1.6}],
     rescaling_factor=0.001,
 )
+
+#breakpoints=[s0 * x[0], k, s0 * x[-1]],
 al_output = function_generator.PiecewiseLinearAmplitudeLoading(
     params=amplitude_loading_params, strict_zero_ios=False, in_wires={"state":input_dict["io"], "target": input_dict["ind"]}
 )
@@ -159,11 +162,11 @@ from classiq import Model
 from classiq.builtin_functions import PhaseEstimation
 from classiq.model import Constraints
 
-n_qpe = 3
+n_qpe = 5
 model = Model(constraints=Constraints(max_width=11))
 model.include_library(qmci_library)
 sp_output = model.state_loading()
-al_output= model.amp_load()
+al_output= model.amp_load(in_wires={"io": sp_output["io"], "ind": sp_output["ind"]})
 
 qpe_out = model.PhaseEstimation(
     params=PhaseEstimation(
@@ -174,37 +177,47 @@ qpe_out = model.PhaseEstimation(
 
 model.set_outputs({"phase_result": qpe_out["PHASE_ESTIMATION"]})
 qprog = synthesize(model.get_model())
-show(qprog)
+# show(qprog)
 
 
-# import matplotlib.pyplot as plt
-#
-# from classiq import execute
-#
-# results = execute(qprog).result()
-#
-# from classiq.execution import ExecutionDetails
-#
-# res = results[0].value
-#
-# phases_counts = res.parsed_counts
-#
-# ## mapping between register string to phases
-# phases_counts = dict(
-#     (sampled_state.state["phase_result"] / 2**n_qpe, sampled_state.shots)
-#     for sampled_state in res.parsed_counts
-# )
-#
-# plt.bar(phases_counts.keys(), phases_counts.values(), width=0.1)
-# plt.xticks(rotation=90)
-# plt.show()
-# print("phase with max probability: ", max(phases_counts, key=phases_counts.get))
-#
-# print(
-#     "measured amplitude: ",
-#     np.sin(np.pi * max(phases_counts, key=phases_counts.get)) ** 2,
-# )
-# print(
-#     "exact amplitude: ",
-#     sum(np.sin(0.5 * n / 2 + 0.4 / 2) ** 2 * probabilities[n] for n in range(2**3)),
-# )
+import matplotlib.pyplot as plt
+
+from classiq import execute
+
+results = execute(qprog).result()
+
+from classiq.execution import ExecutionDetails
+
+res = results[0].value
+
+phases_counts = res.parsed_counts
+
+## mapping between register string to phases
+phases_counts = dict(
+    (sampled_state.state["phase_result"] / 2**n_qpe, sampled_state.shots)
+    for sampled_state in res.parsed_counts
+)
+# print(phases_counts)
+
+plt.bar(phases_counts.keys(), phases_counts.values(), width=0.1)
+plt.xticks(rotation=90)
+plt.show()
+print("phase with max probability: ", max(phases_counts, key=phases_counts.get))
+
+print(
+    "measured amplitude/PAYOFF: ",
+    np.sin(np.pi * max(phases_counts, key=phases_counts.get)) ** 2,
+)
+
+#Expected Outcome
+
+sp_num_qubits= 3
+probabilities = np.linspace(0, 1, 2**sp_num_qubits) / sum(
+    np.linspace(0, 1, 2**sp_num_qubits)
+)
+k=3.14
+s0= 20
+expected_expectation_value = sum(
+    [probabilities[x] * max(s0 * probabilities[x] - k, 0) for x in range(len(probabilities))]
+)
+print('EXPECTED PAYOFF:', expected_expectation_value)
